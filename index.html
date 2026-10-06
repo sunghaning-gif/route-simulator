@@ -16,7 +16,7 @@ function initMap(){
   map=new kakao.maps.Map(document.getElementById('kakaoMap'),{center:new kakao.maps.LatLng(37.5665,126.9780),level:8});
   geocoder=new kakao.maps.services.Geocoder();
 }
-function parseText(t){return t.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map((line,i)=>{let p=line.split(/\t|\s{2,}|,/);return {name:(p[0]||('업체 '+(i+1))).trim(),address:p.slice(1).join(' ').trim()}}).filter(x=>x.address).slice(0,30)}
+function parseText(t){return t.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map((line,i)=>{let p=line.split('\t');if(p.length>=2){return {name:(p[0]||('업체 '+(i+1))).trim(),address:p.slice(1).join(' ').trim()};}return {name:'업체 '+(i+1),address:line.trim()};}).filter(x=>x.address).slice(0,30)}
 function escapeHtml(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function renderTable(){document.getElementById('mStops').textContent=rows.length;let tb=document.getElementById('tbody');if(!rows.length){tb.innerHTML="<tr><td colspan='3' class='empty'>업체를 입력하고 시뮬레이션을 실행하세요.</td></tr>";return}tb.innerHTML=rows.map((r,i)=>`<tr><td><b>${i+1}</b></td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.address)}</td></tr>`).join('')}
 function geocode(address){return new Promise(resolve=>geocoder.addressSearch(address,(res,status)=>resolve(status===kakao.maps.services.Status.OK?{lat:+res[0].y,lng:+res[0].x}:null)))}

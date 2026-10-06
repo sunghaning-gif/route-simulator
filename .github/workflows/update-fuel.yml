@@ -1,0 +1,82 @@
+name: Update Opinet Fuel Prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "10 0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-fuel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest fuel prices from Opinet
+        env:
+          OPINET_API_KEY: ${{ secrets.OPINET_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import json
+          import urllib.parse
+          import urllib.request
+
+          key = os.environ["OPINET_API_KEY"]
+
+          params = urllib.parse.urlencode({
+              "out": "json",
+              "certkey": key
+          })
+
+          url = "https://www.opinet.co.kr/api/avgAllPrice.do?" + params
+
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data = json.loads(response.read().decode("utf-8"))
+
+          oils = data["RESULT"]["OIL"]
+
+          wanted = {
+              "B027": "gasoline",
+              "D047": "diesel"
+          }
+
+          result = {}
+
+          for oil in oils:
+              code = oil["PRODCD"]
+
+              if code in wanted:
+                  result[wanted[code]] = {
+                      "price": float(oil["PRICE"]),
+                      "date": oil["TRADE_DT"],
+                      "name": oil["PRODNM"]
+                  }
+
+          if "gasoline" not in result or "diesel" not in result:
+              raise RuntimeError("휘발유 또는 경유 가격을 찾지 못했습니다.")
+
+          with open("fuel-price.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, ensure_ascii=False, indent=2)
+
+          print(result)
+          PY
+
+      - name: Commit updated fuel price
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add fuel-price.json
+
+          if git diff --cached --quiet; then
+            echo "No fuel price changes."
+            exit 0
+          fi
+
+          git commit -m "Update Opinet fuel prices"
+          git push

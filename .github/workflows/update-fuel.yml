@@ -26,7 +26,7 @@ jobs:
           import urllib.parse
           import urllib.request
 
-          key = os.environ["OPINET_API_KEY"]
+          key = os.environ["OPINET_API_KEY"].strip()
 
           params = urllib.parse.urlencode({
               "out": "json",
@@ -35,10 +35,22 @@ jobs:
 
           url = "https://www.opinet.co.kr/api/avgAllPrice.do?" + params
 
-          with urllib.request.urlopen(url, timeout=30) as response:
-              data = json.loads(response.read().decode("utf-8"))
+          req = urllib.request.Request(
+              url,
+              headers={"User-Agent": "Mozilla/5.0"}
+          )
 
-          oils = data["RESULT"]["OIL"]
+          with urllib.request.urlopen(req, timeout=30) as response:
+              raw = response.read().decode("utf-8")
+
+          print("Opinet response received")
+
+          data = json.loads(raw)
+
+          oils = data.get("RESULT", {}).get("OIL", [])
+
+          if isinstance(oils, dict):
+              oils = [oils]
 
           wanted = {
               "B027": "gasoline",
@@ -48,22 +60,32 @@ jobs:
           result = {}
 
           for oil in oils:
-              code = oil["PRODCD"]
+              code = str(oil.get("PRODCD", "")).strip()
 
               if code in wanted:
                   result[wanted[code]] = {
                       "price": float(oil["PRICE"]),
-                      "date": oil["TRADE_DT"],
-                      "name": oil["PRODNM"]
+                      "date": str(oil.get("TRADE_DT", "")),
+                      "name": str(oil.get("PRODNM", ""))
                   }
 
-          if "gasoline" not in result or "diesel" not in result:
-              raise RuntimeError("휘발유 또는 경유 가격을 찾지 못했습니다.")
+          print("Parsed result:", result)
+
+          if "gasoline" not in result:
+              raise RuntimeError("오피넷 응답에서 휘발유(B027)를 찾지 못했습니다.")
+
+          if "diesel" not in result:
+              raise RuntimeError("오피넷 응답에서 경유(D047)를 찾지 못했습니다.")
 
           with open("fuel-price.json", "w", encoding="utf-8") as f:
-              json.dump(result, f, ensure_ascii=False, indent=2)
+              json.dump(
+                  result,
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
 
-          print(result)
+          print("fuel-price.json created")
           PY
 
       - name: Commit updated fuel price
